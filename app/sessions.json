@@ -1,0 +1,12 @@
+[
+ {
+  "time": "2022-10-17T15:54:23.408296",
+  "session_filename": "test.json",
+  "session_file_sum": 15
+ },
+ {
+  "time": "2022-10-17T15:54:28.452490",
+  "session_filename": "test2.json",
+  "session_file_sum": 20
+ }
+]

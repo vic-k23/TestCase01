@@ -1,13 +1,32 @@
 from fastapi import FastAPI, UploadFile, FastAPI, Response, Depends
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from json import load
 
 from session import SessionData, backend, verifier, cookie
+from sessions_history import SessionLogger
 
+session_logger = SessionLogger()
 
 app = FastAPI()
 
+
+@app.on_event("startup")
+async def init_sessions_logger() -> None:
+    """
+    Открываем логер перед стартом сервиса
+    """
+
+    await session_logger.open()
+
+
+@app.on_event("shutdown")
+async def save_sessions_log() -> None:
+    """
+    Save sessions log
+    """
+
+    await session_logger.save_log()
 
 @app.post("/uploadfile")
 def create_upload_file(file: UploadFile):
@@ -30,6 +49,8 @@ async def create_session(file: UploadFile, response: Response):
 
     await backend.create(session, data)
     cookie.attach_to_response(response, session)
+
+    await session_logger.log_session(data)
 
     return f"created session for {file.filename}"
 
