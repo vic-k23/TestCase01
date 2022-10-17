@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, UploadFile, FastAPI, Response, Depends
 from uuid import uuid4
 
@@ -5,6 +7,9 @@ from json import load
 
 from session import SessionData, backend, verifier, cookie
 from sessions_history import SessionLogger
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 session_logger = SessionLogger()
 
@@ -34,7 +39,8 @@ def create_upload_file(file: UploadFile):
     Синхронный метод подсчёта суммы чисел в массиве из файла
     """
 
-    return {"sum": sum(int(_) for _ in load(file.file)["array"] if _ is not None)}
+    d_json = load(file.file)
+    return {"sum": sum(int(_) for _ in d_json["array"] if _ is not None)}
 
 
 @app.post("/uploadfile-async")
@@ -55,7 +61,7 @@ async def create_session(file: UploadFile, response: Response):
     return f"created session for {file.filename}"
 
 
-@app.get("/sum", dependencies=[Depends(cookie)])
+@app.get("/sum", dependencies=[Depends(cookie)], response_model=SessionData)
 async def get_sum(session_data: SessionData = Depends(verifier)):
     """
     Возвращает сохранённые данные: имя файла и сумму чисел в массиве файла
