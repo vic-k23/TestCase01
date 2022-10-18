@@ -1,7 +1,7 @@
 from datetime import datetime
 from json import load, dump
 from pathlib import Path
-from session import SessionData
+from models import FileData
 
 
 class SessionLogger:
@@ -28,17 +28,19 @@ class SessionLogger:
             with self.fp.open() as f:
                 self.sessions_log = load(f)
 
-    async def log_session(self, sd: SessionData) -> None:
+    async def log_session(self, session_id: str, file_data: FileData) -> None:
         """
         Adds session data to log
-        :param sd: данные сессии в формате SessionData
+        :param session_id: идентификатор сессии
+        :param file_data: данные сессии в формате SessionData
         """
 
         self.sessions_log.append(
             {
                 "time": datetime.now().isoformat(),
-                "session_filename": sd.filename,
-                "session_file_sum": sd.file_sum
+                "session_id": session_id,
+                "session_filename": file_data.filename,
+                "session_file_sum": file_data.file_sum
             }
         )
 

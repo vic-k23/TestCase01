@@ -1,11 +1,21 @@
 import logging
+import uvicorn
 
-from fastapi import FastAPI, UploadFile, FastAPI, Response, Depends, HTTPException
-from uuid import uuid4
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    FastAPI,
+    Response,
+    Request,
+    Depends,
+    HTTPException,
+)
+from uuid import uuid4, UUID
 
 from json import load, JSONDecodeError
 
-from session import SessionData, backend, verifier, cookie
+from models import FileData, SessionData
+from session import backend, verifier, cookie, check_session_exists
 from sessions_history import SessionLogger
 
 logging.basicConfig(level=logging.INFO)
@@ -49,20 +59,34 @@ def create_upload_file(file: UploadFile):
 
 
 @app.post("/uploadfile-async")
-async def create_session(file: UploadFile, response: Response):
+async def create_session(file: UploadFile,
+                         response: Response,
+                         request: Request, session_id: UUID = Depends(check_session_exists)):
     """
     Асинхронный метод подсчёта суммы чисел в массиве из файла. Создаёт сессию и сохраняет данные:
     имя файла и сумму чисел
     """
 
     try:
-        session = uuid4()
-        data = SessionData(filename=file.filename, file_sum=sum(int(_) for _ in load(file.file)["array"] if _ is not None))
+        file_data = FileData(
+            filename=file.filename,
+            file_sum=sum(int(_) for _ in load(file.file)["array"] if _ is not None)
+        )
 
-        await backend.create(session, data)
-        cookie.attach_to_response(response, session)
+        if not session_id:
+            session_id = uuid4()
+            log.info(f"New session: {session_id}")
+            session_data = SessionData(files=[file_data])
 
-        await session_logger.log_session(data)
+            await backend.create(session_id, session_data)
+            cookie.attach_to_response(response, session_id)
+            log.debug(f"Session cookie: {response.headers.raw[0][1].decode()}")
+        else:
+            session_data = await backend.read(session_id)
+            session_data.files.append(file_data)
+            await backend.update(session_id, session_data)
+
+        await session_logger.log_session(str(session_id), file_data)
 
         return f"created session for {file.filename}"
     except (JSONDecodeError, KeyError) as ex:

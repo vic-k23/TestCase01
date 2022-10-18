@@ -82,6 +82,10 @@ def test_get_sum_success():
 
     assert response.status_code == 200
     assert response.json() == {
-        "filename": "test.json",
-        "file_sum": 15
+        'files': [
+            {
+                'file_sum': 15,
+                'filename': 'test.json'
+            }
+        ]
     }
