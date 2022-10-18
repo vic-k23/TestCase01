@@ -1,9 +1,9 @@
 import logging
 
-from fastapi import FastAPI, UploadFile, FastAPI, Response, Depends
+from fastapi import FastAPI, UploadFile, FastAPI, Response, Depends, HTTPException
 from uuid import uuid4
 
-from json import load
+from json import load, JSONDecodeError
 
 from session import SessionData, backend, verifier, cookie
 from sessions_history import SessionLogger
@@ -39,8 +39,13 @@ def create_upload_file(file: UploadFile):
     Синхронный метод подсчёта суммы чисел в массиве из файла
     """
 
-    d_json = load(file.file)
-    return {"sum": sum(int(_) for _ in d_json["array"] if _ is not None)}
+    try:
+        d_json = load(file.file)
+        return {"sum": sum(int(_) for _ in d_json["array"] if _ is not None)}
+
+    except (JSONDecodeError, KeyError) as ex:
+        log.error("Неверный вормат файла: не JSON формат", exc_info=ex)
+        raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
 
 @app.post("/uploadfile-async")
@@ -50,15 +55,19 @@ async def create_session(file: UploadFile, response: Response):
     имя файла и сумму чисел
     """
 
-    session = uuid4()
-    data = SessionData(filename=file.filename, file_sum=sum(int(_) for _ in load(file.file)["array"] if _ is not None))
+    try:
+        session = uuid4()
+        data = SessionData(filename=file.filename, file_sum=sum(int(_) for _ in load(file.file)["array"] if _ is not None))
 
-    await backend.create(session, data)
-    cookie.attach_to_response(response, session)
+        await backend.create(session, data)
+        cookie.attach_to_response(response, session)
 
-    await session_logger.log_session(data)
+        await session_logger.log_session(data)
 
-    return f"created session for {file.filename}"
+        return f"created session for {file.filename}"
+    except (JSONDecodeError, KeyError) as ex:
+        log.error("Неверный вормат файла: не JSON формат", "JSON Decode error", exc_info=ex)
+        raise HTTPException(status_code=415, detail="Unsupported Media Type")
 
 
 @app.get("/sum", dependencies=[Depends(cookie)], response_model=SessionData)

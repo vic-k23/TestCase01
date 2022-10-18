@@ -27,6 +27,21 @@ def test_create_upload_file():
     }
 
 
+def test_create_upload_file_wrong_json():
+    files = {'file': ('test.json',
+                      "'array': ['1', '2', '3', '4', 5]",
+                      'application/json',
+                      )}
+    response = test_client.post(
+        "/uploadfile",
+        headers=headers,
+        files=files
+    )
+
+    assert response.status_code == 415
+    assert response.json() == {"detail": "Unsupported Media Type"}
+
+
 def test_get_sum_error():
     response = test_client.get(
         "/sum",
