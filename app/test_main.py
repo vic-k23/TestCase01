@@ -69,7 +69,11 @@ def test_create_session():
     cookies = response.cookies
 
     assert response.status_code == 200
-    assert response.text == '"created session for test.json"'
+    assert "session_id" in response.json()
+    assert response.json()['file_data'] == {
+        "filename": "test.json",
+        "file_sum": 15
+    }
 
 
 def test_get_sum_success():
@@ -89,3 +93,25 @@ def test_get_sum_success():
             }
         ]
     }
+
+
+def test_get_sum_by_session_id():
+
+    response = test_client.get(
+        "/sum",
+        headers=headers,
+        cookies=cookies,
+        data={
+            'session_id': "f5c7cbcd - d4a8 - 4eb9 - 9ee6 - 1b7f66a6aaa0"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'files': [
+            {
+                'file_sum': 15,
+                'filename': 'test.json'
+            }
+        ]
+    } or response.text == "К сожалению по этому ID сессии ничего не найдено"

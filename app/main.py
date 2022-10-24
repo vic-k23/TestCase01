@@ -1,4 +1,5 @@
 import logging
+# import uvicorn
 
 from fastapi import (
     FastAPI,
@@ -110,7 +111,7 @@ async def get_sum(session_data: SessionData = Depends(verifier)):
 
 
 @app.get("/sum-by-session-id", response_model=SessionData | str)
-async def get_sum(session_id: str):
+async def get_sum_by_session_id(session_id: str):
     """
     Возвращает сохранённые данные: имя файла и сумму чисел в массиве файла
     """
@@ -121,3 +122,7 @@ async def get_sum(session_id: str):
         return session_data
     else:
         return "К сожалению по этому ID сессии ничего не найдено"
+
+#
+# if __name__ == '__main__':
+#     uvicorn.run("main:app", reload=True)
