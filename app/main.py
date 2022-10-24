@@ -1,5 +1,4 @@
 import logging
-import uvicorn
 
 from fastapi import (
     FastAPI,
@@ -83,12 +82,19 @@ async def create_session(file: UploadFile,
             log.debug(f"Session cookie: {response.headers.raw[0][1].decode()}")
         else:
             session_data = await backend.read(session_id)
-            session_data.files.append(file_data)
-            await backend.update(session_id, session_data)
+            if session_data:
+                session_data.files.append(file_data)
+                await backend.update(session_id, session_data)
+            else:
+                session_data = SessionData(files=[file_data])
+                await backend.create(session_id, session_data)
 
         await session_logger.log_session(str(session_id), file_data)
 
-        return f"created session for {file.filename}"
+        return {
+            "session_id": session_id,
+            "file_data": file_data
+        }
     except (JSONDecodeError, KeyError) as ex:
         log.error("Неверный вормат файла: не JSON формат", "JSON Decode error", exc_info=ex)
         raise HTTPException(status_code=415, detail="Unsupported Media Type")
@@ -101,3 +107,17 @@ async def get_sum(session_data: SessionData = Depends(verifier)):
     """
 
     return session_data
+
+
+@app.get("/sum-by-session-id", response_model=SessionData | str)
+async def get_sum(session_id: str):
+    """
+    Возвращает сохранённые данные: имя файла и сумму чисел в массиве файла
+    """
+
+    session_data = await backend.read(UUID(session_id))
+
+    if isinstance(session_data, SessionData):
+        return session_data
+    else:
+        return "К сожалению по этому ID сессии ничего не найдено"
