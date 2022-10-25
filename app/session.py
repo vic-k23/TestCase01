@@ -1,28 +1,16 @@
 import logging
-
-from fastapi import Request, HTTPException
-from fastapi_sessions.backends.implementations import InMemoryBackend
-from fastapi_sessions.session_verifier import SessionVerifier
-from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
-
-from itsdangerous import BadSignature, SignatureExpired
 from uuid import UUID
 
+from fastapi import Request, HTTPException
+from fastapi_sessions.session_verifier import SessionVerifier
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
 from models import SessionData
+from storage import InMemoryStorage, RedisStorage
+import settings
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-
-cookie_params = CookieParameters()
-
-cookie = SessionCookie(
-    cookie_name="file_upload",
-    identifier="general_verifier",
-    auto_error=True,
-    secret_key="DONOTUSE",
-    cookie_params=cookie_params,
-)
-backend = InMemoryBackend[UUID, SessionData]()
 
 
 def check_session_exists(request: Request) -> UUID | bool:
@@ -31,13 +19,16 @@ def check_session_exists(request: Request) -> UUID | bool:
     """
 
     try:
-        signed_session_id = request.cookies.get(cookie.model.name)
+        signed_session_id = request.cookies.get(settings.COOKIE_PARAMS.get('cookie_name', 'file_upload'))
         if signed_session_id is None:
             return False
         return UUID(
-            cookie.signer.loads(
+            URLSafeTimedSerializer(
+                settings.COOKIE_PARAMS.get('secret_key', "DONOTUSE"),
+                salt=settings.COOKIE_PARAMS.get('cookie_name', 'file_upload')
+            ).loads(
                 signed_session_id,
-                max_age=cookie.cookie_params.max_age,
+                max_age=settings.COOKIE_PARAMS.get('max_age', 3600),
                 return_timestamp=False,
             )
         )
@@ -49,12 +40,12 @@ def check_session_exists(request: Request) -> UUID | bool:
 
 class BasicVerifier(SessionVerifier[UUID, SessionData]):
     def __init__(
-        self,
-        *,
-        identifier: str,
-        auto_error: bool,
-        backend: InMemoryBackend[UUID, SessionData],
-        auth_http_exception: HTTPException,
+            self,
+            *,
+            identifier: str,
+            auto_error: bool,
+            backend: InMemoryStorage | RedisStorage,
+            auth_http_exception: HTTPException,
     ):
         self._identifier = identifier
         self._auto_error = auto_error
@@ -80,11 +71,3 @@ class BasicVerifier(SessionVerifier[UUID, SessionData]):
     def verify_session(self, model: SessionData) -> bool:
         """If the session exists, it is valid"""
         return True
-
-
-verifier = BasicVerifier(
-    identifier="general_verifier",
-    auto_error=True,
-    backend=backend,
-    auth_http_exception=HTTPException(status_code=403, detail="invalid session")
-)

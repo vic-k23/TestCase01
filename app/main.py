@@ -1,6 +1,9 @@
 import logging
-# import uvicorn
+from typing import Dict
+from uuid import uuid4, UUID
+from json import load, JSONDecodeError
 
+# import uvicorn
 from fastapi import (
     FastAPI,
     UploadFile,
@@ -10,20 +13,41 @@ from fastapi import (
     Depends,
     HTTPException,
 )
-from uuid import uuid4, UUID
-
-from json import load, JSONDecodeError
+from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 
 from models import FileData, SessionData
-from session import backend, verifier, cookie, check_session_exists
+from session import check_session_exists, BasicVerifier
+# from storage import InMemoryStorage
+from storage import RedisStorage
 from sessions_history import SessionLogger
+import settings
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 
 session_logger = SessionLogger()
 
 app = FastAPI()
+
+cookie_params = CookieParameters(max_age=settings.COOKIE_PARAMS.get('max_age', 3600))
+
+cookie = SessionCookie(
+    cookie_name=settings.COOKIE_PARAMS.get('cookie_name', 'file_upload'),
+    identifier=settings.COOKIE_PARAMS.get('identifier', 'general_verifier'),
+    auto_error=True,
+    secret_key=settings.COOKIE_PARAMS.get('secret_key', "DONOTUSE"),
+    cookie_params=cookie_params,
+)
+
+# backend = InMemoryStorage()
+backend = RedisStorage()
+
+verifier = BasicVerifier(
+    identifier=settings.COOKIE_PARAMS.get('identifier', 'general_verifier'),
+    auto_error=True,
+    backend=backend,
+    auth_http_exception=HTTPException(status_code=403, detail="invalid session")
+)
 
 
 @app.on_event("startup")
@@ -43,6 +67,7 @@ async def save_sessions_log() -> None:
 
     await session_logger.save_log()
 
+
 @app.post("/uploadfile")
 def create_upload_file(file: UploadFile):
     """
@@ -61,7 +86,7 @@ def create_upload_file(file: UploadFile):
 @app.post("/uploadfile-async")
 async def create_session(file: UploadFile,
                          response: Response,
-                         request: Request, session_id: UUID = Depends(check_session_exists)):
+                         session_id: UUID = Depends(check_session_exists)):
     """
     Асинхронный метод подсчёта суммы чисел в массиве из файла. Создаёт сессию и сохраняет данные:
     имя файла и сумму чисел
@@ -116,12 +141,23 @@ async def get_sum_by_session_id(session_id: str):
     Возвращает сохранённые данные: имя файла и сумму чисел в массиве файла
     """
 
+    log.debug(f"{session_id=} and after type conversion {UUID(session_id)}")
     session_data = await backend.read(UUID(session_id))
 
     if isinstance(session_data, SessionData):
         return session_data
     else:
         return "К сожалению по этому ID сессии ничего не найдено"
+
+
+@app.get("/get-all-sums", response_model=Dict[UUID, SessionData] | str)
+async def get_all_sums():
+    all_session_data = await backend.read_all()
+
+    if isinstance(all_session_data, dict):
+        return all_session_data
+    else:
+        return "К сожалению ничего не найдено"
 
 #
 # if __name__ == '__main__':
