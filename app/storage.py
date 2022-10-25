@@ -43,6 +43,7 @@ class RedisStorage:
                               f":{settings.REDIS_PARAMS.get('port', 6379)}",
                               # username=settings.REDIS_PARAMS.get('user', 'user'),
                               password=settings.REDIS_PARAMS.get('password', ''),
+                              db=1,
                               decode_responses=True
                               )
 
